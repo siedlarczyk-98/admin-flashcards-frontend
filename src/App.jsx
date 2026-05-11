@@ -205,7 +205,7 @@ function AdminApp() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="mark">Chackara <em>3.0</em></span>
+          <span className="mark">Admin Flashcards e Questões <em>3.0</em></span>
           <span className="dot" />
           <span className="kicker">Admin · Curso</span>
         </div>

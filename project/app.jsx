@@ -94,7 +94,7 @@ const App = () => {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="mark">Chackara <em>3.0</em></span>
+          <span className="mark">Admin Flashcards e Questões <em>3.0</em></span>
           <span className="dot"/>
           <span className="kicker">Admin · Curso</span>
         </div>
@@ -108,7 +108,7 @@ const App = () => {
 
       <div className="section-tabs">
         <button className={section === "questoes" ? "active" : ""} onClick={()=>switchSection("questoes")}>
-          Questões — Trilha
+          Questões
           <span className="count">{coursesWithQ.reduce((a,c) => a + (questoesMap[c.id]?.length || 0), 0)}</span>
         </button>
         <button className={section === "flashcards" ? "active" : ""} onClick={()=>switchSection("flashcards")}>
