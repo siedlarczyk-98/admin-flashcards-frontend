@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { Icon } from '../ui/Icon.jsx';
 import { ConfirmDelete } from '../ui/ConfirmDelete.jsx';
+import { Pagination, usePagination } from '../ui/Pagination.jsx';
 
 function QuestoesFilters({ onSearch, onImport }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
-  const [adv, setAdv] = useState({ id: '', inst: '', ano: '', dif: '' });
+  const [adv, setAdv] = useState({ id: '' });
 
   const submit = (e) => {
     e?.preventDefault();
@@ -23,40 +24,17 @@ function QuestoesFilters({ onSearch, onImport }) {
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
-        <button
-          type="button"
-          className={`advanced-toggle ${open ? 'open' : ''}`}
-          onClick={() => setOpen(!open)}
-        >
+        <button type="button" className={`advanced-toggle ${open ? 'open' : ''}`} onClick={() => setOpen(!open)}>
           Filtro avançado <span className="chev"><Icon.chev /></span>
         </button>
-        <button type="submit" className="btn btn-primary">
-          <Icon.search /> Pesquisar
-        </button>
-        <button type="button" className="btn btn-secondary" onClick={onImport}>
-          <Icon.upload /> Importar XLSX
-        </button>
+        <button type="submit" className="btn btn-primary"><Icon.search /> Pesquisar</button>
+        <button type="button" className="btn btn-secondary" onClick={onImport}><Icon.upload /> Importar XLSX</button>
       </div>
       {open && (
         <div className="adv-panel">
           <div className="field">
-            <label>ID do curso</label>
+            <label>ID do caso</label>
             <input value={adv.id} onChange={(e) => setAdv({ ...adv, id: e.target.value })} placeholder="ex. 2572" />
-          </div>
-          <div className="field">
-            <label>Instituição</label>
-            <input value={adv.inst} onChange={(e) => setAdv({ ...adv, inst: e.target.value })} placeholder="USP, ENARE…" />
-          </div>
-          <div className="field">
-            <label>Ano</label>
-            <input value={adv.ano} onChange={(e) => setAdv({ ...adv, ano: e.target.value })} placeholder="2024" />
-          </div>
-          <div className="field">
-            <label>Dificuldade</label>
-            <select value={adv.dif} onChange={(e) => setAdv({ ...adv, dif: e.target.value })}>
-              <option value="">Todas</option>
-              <option>Fácil</option><option>Médio</option><option>Difícil</option>
-            </select>
           </div>
         </div>
       )}
@@ -65,7 +43,7 @@ function QuestoesFilters({ onSearch, onImport }) {
 }
 
 export function QuestoesList({ courses, loading, onOpen, onDeleteAll, onImport }) {
-  const [filter, setFilter] = useState({ q: '', id: '', inst: '', ano: '', dif: '' });
+  const [filter, setFilter] = useState({ q: '', id: '' });
   const [confirm, setConfirm] = useState(null);
 
   const filtered = useMemo(() => courses.filter((c) => {
@@ -74,13 +52,15 @@ export function QuestoesList({ courses, loading, onOpen, onDeleteAll, onImport }
     return true;
   }), [filter, courses]);
 
+  const { page, setPage, totalPages, paginated, total } = usePagination(filtered);
+
   return (
     <>
       <QuestoesFilters onSearch={setFilter} onImport={onImport} />
       <div className="table-card">
         <div className="table-head">
           <h3>Cursos com questões</h3>
-          <span className="meta">{filtered.length} curso{filtered.length !== 1 ? 's' : ''}</span>
+          <span className="meta">{total} curso{total !== 1 ? 's' : ''}</span>
         </div>
         <table>
           <thead>
@@ -95,22 +75,12 @@ export function QuestoesList({ courses, loading, onOpen, onDeleteAll, onImport }
           </thead>
           <tbody>
             {loading && (
-              <tr>
-                <td colSpan={6}>
-                  <div className="loading-row">
-                    <span className="spinner" />
-                    Carregando questões…
-                  </div>
-                </td>
-              </tr>
+              <tr><td colSpan={6}><div className="loading-row"><span className="spinner" />Carregando questões…</div></td></tr>
             )}
-            {!loading && filtered.map((c) => (
+            {!loading && paginated.map((c) => (
               <tr key={c.id}>
                 <td className="cell-id">#{c.id}</td>
-                <td className="cell-name">
-                  {c.nome}
-                  <span className="sub">{c.diagnostico}</span>
-                </td>
+                <td className="cell-name">{c.nome}<span className="sub">{c.diagnostico}</span></td>
                 <td><span className="badge">{c.tipo}</span></td>
                 <td style={{ color: 'var(--fg-muted)' }}>{c.especialidade}</td>
                 <td style={{ textAlign: 'right' }}>
@@ -121,28 +91,18 @@ export function QuestoesList({ courses, loading, onOpen, onDeleteAll, onImport }
                 </td>
                 <td>
                   <div className="cell-actions">
-                    <button className="btn-icon" title="Ver questões" onClick={() => onOpen(c.id)}>
-                      <Icon.view />
-                    </button>
-                    <button className="btn-icon danger" title="Excluir todas" onClick={() => setConfirm(c)}>
-                      <Icon.trash />
-                    </button>
+                    <button className="btn-icon" title="Ver questões" onClick={() => onOpen(c.id)}><Icon.view /></button>
+                    <button className="btn-icon danger" title="Excluir todas" onClick={() => setConfirm(c)}><Icon.trash /></button>
                   </div>
                 </td>
               </tr>
             ))}
-            {!loading && filtered.length === 0 && (
-              <tr>
-                <td colSpan={6}>
-                  <div className="empty">
-                    <h4>Nenhum curso encontrado</h4>
-                    <p>Ajuste os filtros ou importe um arquivo XLSX.</p>
-                  </div>
-                </td>
-              </tr>
+            {!loading && total === 0 && (
+              <tr><td colSpan={6}><div className="empty"><h4>Nenhum curso encontrado</h4><p>Ajuste os filtros ou importe um arquivo XLSX.</p></div></td></tr>
             )}
           </tbody>
         </table>
+        <Pagination page={page} totalPages={totalPages} total={total} setPage={setPage} />
       </div>
 
       <ConfirmDelete
@@ -150,9 +110,7 @@ export function QuestoesList({ courses, loading, onOpen, onDeleteAll, onImport }
         onClose={() => setConfirm(null)}
         onConfirm={() => { onDeleteAll(confirm.id); setConfirm(null); }}
         title="Excluir todas as questões"
-        message={confirm ? (
-          <>Isso vai excluir todas as <strong>{confirm.questoes_count ?? confirm.questoes} questões</strong> do curso <strong>#{confirm.id}</strong>. Essa ação não pode ser desfeita.</>
-        ) : ''}
+        message={confirm ? (<>Isso vai excluir todas as <strong>{confirm.questoes_count ?? confirm.questoes} questões</strong> do curso <strong>#{confirm.id}</strong>. Essa ação não pode ser desfeita.</>) : ''}
         confirmLabel="Excluir todas"
       />
     </>

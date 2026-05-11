@@ -1,49 +1,31 @@
 import React, { useMemo, useState } from 'react';
 import { Icon } from '../ui/Icon.jsx';
 import { ConfirmDelete } from '../ui/ConfirmDelete.jsx';
+import { Pagination, usePagination } from '../ui/Pagination.jsx';
 
 function FlashcardsFilters({ onSearch, onImport }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
-  const [adv, setAdv] = useState({ id: '', tags: '' });
+  const [adv, setAdv] = useState({ id: '' });
 
   return (
-    <form
-      className="filter-bar"
-      onSubmit={(e) => { e.preventDefault(); onSearch({ q, ...adv }); }}
-    >
+    <form className="filter-bar" onSubmit={(e) => { e.preventDefault(); onSearch({ q, ...adv }); }}>
       <div className="filter-row">
         <div className="search">
           <Icon.search />
-          <input
-            placeholder="Buscar por nome do curso…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+          <input placeholder="Buscar por nome do curso…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        <button
-          type="button"
-          className={`advanced-toggle ${open ? 'open' : ''}`}
-          onClick={() => setOpen(!open)}
-        >
+        <button type="button" className={`advanced-toggle ${open ? 'open' : ''}`} onClick={() => setOpen(!open)}>
           Filtro avançado <span className="chev"><Icon.chev /></span>
         </button>
-        <button type="submit" className="btn btn-primary">
-          <Icon.search /> Pesquisar
-        </button>
-        <button type="button" className="btn btn-secondary" onClick={onImport}>
-          <Icon.upload /> Importar XLSX
-        </button>
+        <button type="submit" className="btn btn-primary"><Icon.search /> Pesquisar</button>
+        <button type="button" className="btn btn-secondary" onClick={onImport}><Icon.upload /> Importar XLSX</button>
       </div>
       {open && (
         <div className="adv-panel">
           <div className="field">
             <label>ID do curso</label>
             <input value={adv.id} onChange={(e) => setAdv({ ...adv, id: e.target.value })} placeholder="ex. 2572" />
-          </div>
-          <div className="field">
-            <label>Tags</label>
-            <input value={adv.tags} onChange={(e) => setAdv({ ...adv, tags: e.target.value })} placeholder="vasculite, ANCA…" />
           </div>
         </div>
       )}
@@ -61,13 +43,15 @@ export function FlashcardsList({ courses, loading, onOpen, onDeleteAll, onImport
     return true;
   }), [filter, courses]);
 
+  const { page, setPage, totalPages, paginated, total } = usePagination(filtered);
+
   return (
     <>
       <FlashcardsFilters onSearch={setFilter} onImport={onImport} />
       <div className="table-card">
         <div className="table-head">
           <h3>Cursos com flashcards</h3>
-          <span className="meta">{filtered.length} curso{filtered.length !== 1 ? 's' : ''}</span>
+          <span className="meta">{total} curso{total !== 1 ? 's' : ''}</span>
         </div>
         <table>
           <thead>
@@ -82,22 +66,12 @@ export function FlashcardsList({ courses, loading, onOpen, onDeleteAll, onImport
           </thead>
           <tbody>
             {loading && (
-              <tr>
-                <td colSpan={6}>
-                  <div className="loading-row">
-                    <span className="spinner" />
-                    Carregando flashcards…
-                  </div>
-                </td>
-              </tr>
+              <tr><td colSpan={6}><div className="loading-row"><span className="spinner" />Carregando flashcards…</div></td></tr>
             )}
-            {!loading && filtered.map((c) => (
+            {!loading && paginated.map((c) => (
               <tr key={c.id}>
                 <td className="cell-id">#{c.id}</td>
-                <td className="cell-name">
-                  {c.nome}
-                  <span className="sub">{c.diagnostico}</span>
-                </td>
+                <td className="cell-name">{c.nome}<span className="sub">{c.diagnostico}</span></td>
                 <td><span className="badge">{c.tipo}</span></td>
                 <td style={{ color: 'var(--fg-muted)' }}>{c.especialidade}</td>
                 <td style={{ textAlign: 'right' }}>
@@ -108,28 +82,18 @@ export function FlashcardsList({ courses, loading, onOpen, onDeleteAll, onImport
                 </td>
                 <td>
                   <div className="cell-actions">
-                    <button className="btn-icon" title="Ver flashcards" onClick={() => onOpen(c.id)}>
-                      <Icon.view />
-                    </button>
-                    <button className="btn-icon danger" title="Excluir todos" onClick={() => setConfirm(c)}>
-                      <Icon.trash />
-                    </button>
+                    <button className="btn-icon" title="Ver flashcards" onClick={() => onOpen(c.id)}><Icon.view /></button>
+                    <button className="btn-icon danger" title="Excluir todos" onClick={() => setConfirm(c)}><Icon.trash /></button>
                   </div>
                 </td>
               </tr>
             ))}
-            {!loading && filtered.length === 0 && (
-              <tr>
-                <td colSpan={6}>
-                  <div className="empty">
-                    <h4>Nenhum curso encontrado</h4>
-                    <p>Ajuste os filtros ou importe um arquivo XLSX.</p>
-                  </div>
-                </td>
-              </tr>
+            {!loading && total === 0 && (
+              <tr><td colSpan={6}><div className="empty"><h4>Nenhum curso encontrado</h4><p>Ajuste os filtros ou importe um arquivo XLSX.</p></div></td></tr>
             )}
           </tbody>
         </table>
+        <Pagination page={page} totalPages={totalPages} total={total} setPage={setPage} />
       </div>
 
       <ConfirmDelete
@@ -137,9 +101,7 @@ export function FlashcardsList({ courses, loading, onOpen, onDeleteAll, onImport
         onClose={() => setConfirm(null)}
         onConfirm={() => { onDeleteAll(confirm.id); setConfirm(null); }}
         title="Excluir todos os flashcards"
-        message={confirm ? (
-          <>Isso vai excluir todos os <strong>{confirm.flashcards_count ?? confirm.flashcards} flashcards</strong> do curso <strong>#{confirm.id}</strong>. Essa ação não pode ser desfeita.</>
-        ) : ''}
+        message={confirm ? (<>Isso vai excluir todos os <strong>{confirm.flashcards_count ?? confirm.flashcards} flashcards</strong> do curso <strong>#{confirm.id}</strong>. Essa ação não pode ser desfeita.</>) : ''}
         confirmLabel="Excluir todos"
       />
     </>

@@ -3,10 +3,12 @@ import { Icon } from '../ui/Icon.jsx';
 import { DifficultyBadge } from '../ui/DifficultyBadge.jsx';
 import { ConfirmDelete } from '../ui/ConfirmDelete.jsx';
 import { QuestaoEditModal } from './QuestaoEditModal.jsx';
+import { Pagination, usePagination } from '../ui/Pagination.jsx';
 
 export function QuestoesDetail({ course, questoes, loading, onBack, onSave, onDelete }) {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const { page, setPage, totalPages, paginated, total } = usePagination(questoes);
 
   return (
     <>
@@ -16,21 +18,13 @@ export function QuestoesDetail({ course, questoes, loading, onBack, onSave, onDe
 
       <div className="course-card">
         <div>
-          <div className="id-chip">
-            Curso · <span className="num">#{course.id}</span>
-          </div>
+          <div className="id-chip">Curso · <span className="num">#{course.id}</span></div>
           <h2>{course.nome}</h2>
           <p className="subtitle">
-            {course.tipo}
-            <span className="dot" />
-            {course.especialidade}
-            <span className="dot" />
-            {course.diagnostico}
+            {course.tipo}<span className="dot" />{course.especialidade}<span className="dot" />{course.diagnostico}
           </p>
           <div className="tag-list">
-            {(course.tags || []).map((t) => (
-              <span key={t} className="badge">{t}</span>
-            ))}
+            {(course.tags || []).map((t) => <span key={t} className="badge">{t}</span>)}
           </div>
         </div>
         <div className="counter-block">
@@ -42,7 +36,7 @@ export function QuestoesDetail({ course, questoes, loading, onBack, onSave, onDe
       <div className="table-card">
         <div className="table-head">
           <h3>Questões do curso #{course.id}</h3>
-          <span className="meta">{questoes.length} questões encontradas</span>
+          <span className="meta">{total} questões encontradas</span>
         </div>
         <table>
           <thead>
@@ -59,16 +53,9 @@ export function QuestoesDetail({ course, questoes, loading, onBack, onSave, onDe
           </thead>
           <tbody>
             {loading && (
-              <tr>
-                <td colSpan={8}>
-                  <div className="loading-row">
-                    <span className="spinner" />
-                    Carregando questões…
-                  </div>
-                </td>
-              </tr>
+              <tr><td colSpan={8}><div className="loading-row"><span className="spinner" />Carregando questões…</div></td></tr>
             )}
-            {!loading && questoes.map((q) => (
+            {!loading && paginated.map((q) => (
               <tr key={q.id}>
                 <td className="cell-id">#{q.id}</td>
                 <td className="cell-truncate" title={q.enunciado?.replace(/<[^>]+>/g, '')}>
@@ -80,35 +67,23 @@ export function QuestoesDetail({ course, questoes, loading, onBack, onSave, onDe
                 <td><DifficultyBadge value={q.dificuldade} /></td>
                 <td>
                   <div className="tag-list">
-                    {(q.tags || []).slice(0, 3).map((t) => (
-                      <span key={t} className="badge">{t}</span>
-                    ))}
+                    {(q.tags || []).slice(0, 3).map((t) => <span key={t} className="badge">{t}</span>)}
                   </div>
                 </td>
                 <td>
                   <div className="cell-actions">
-                    <button className="btn-icon" title="Editar" onClick={() => setEditing(q)}>
-                      <Icon.edit />
-                    </button>
-                    <button className="btn-icon danger" title="Excluir" onClick={() => setDeleting(q)}>
-                      <Icon.trash />
-                    </button>
+                    <button className="btn-icon" title="Editar" onClick={() => setEditing(q)}><Icon.edit /></button>
+                    <button className="btn-icon danger" title="Excluir" onClick={() => setDeleting(q)}><Icon.trash /></button>
                   </div>
                 </td>
               </tr>
             ))}
-            {!loading && questoes.length === 0 && (
-              <tr>
-                <td colSpan={8}>
-                  <div className="empty">
-                    <h4>Nenhuma questão cadastrada</h4>
-                    <p>Importe via XLSX para começar.</p>
-                  </div>
-                </td>
-              </tr>
+            {!loading && total === 0 && (
+              <tr><td colSpan={8}><div className="empty"><h4>Nenhuma questão cadastrada</h4><p>Importe via XLSX para começar.</p></div></td></tr>
             )}
           </tbody>
         </table>
+        <Pagination page={page} totalPages={totalPages} total={total} setPage={setPage} />
       </div>
 
       <QuestaoEditModal
@@ -123,9 +98,7 @@ export function QuestoesDetail({ course, questoes, loading, onBack, onSave, onDe
         onClose={() => setDeleting(null)}
         onConfirm={() => { onDelete(deleting.id); setDeleting(null); }}
         title="Excluir questão"
-        message={deleting ? (
-          <>Tem certeza que deseja excluir a <strong>Questão #{deleting.id}</strong>? Essa ação não pode ser desfeita.</>
-        ) : ''}
+        message={deleting ? (<>Tem certeza que deseja excluir a <strong>Questão #{deleting.id}</strong>? Essa ação não pode ser desfeita.</>) : ''}
       />
     </>
   );

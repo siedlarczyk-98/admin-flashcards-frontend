@@ -1,51 +1,42 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ToastProvider, useToast } from './components/ui/Toast.jsx';
-import { LoginPage } from './components/auth/LoginPage.jsx';
 import { QuestoesList } from './components/questoes/QuestoesList.jsx';
 import { QuestoesDetail } from './components/questoes/QuestoesDetail.jsx';
 import { ImportModal } from './components/questoes/ImportModal.jsx';
 import { FlashcardsList } from './components/flashcards/FlashcardsList.jsx';
 import { FlashcardsDetail } from './components/flashcards/FlashcardsDetail.jsx';
 import { FlashcardEditModal } from './components/flashcards/FlashcardEditModal.jsx';
-import { token, cursosAPI, questoesAPI, flashcardsAPI } from './services/api.js';
+import { BuscaGlobal } from './components/BuscaGlobal.jsx';
+import { cursosAPI, questoesAPI, flashcardsAPI } from './services/api.js';
 
 function AdminApp() {
   const toast = useToast();
 
-  // ── Auth ──
-  const [loggedIn, setLoggedIn] = useState(token.exists());
-
-  useEffect(() => {
-    const handler = () => setLoggedIn(false);
-    window.addEventListener('p360:logout', handler);
-    return () => window.removeEventListener('p360:logout', handler);
-  }, []);
-
   // ── Navigation ──
+  // section: 'questoes' | 'flashcards' | 'busca'
   const [section, setSection]   = useState('questoes');
   const [courseId, setCourseId] = useState(null);
 
   // ── Data ──
-  const [courses, setCourses]               = useState([]);
-  const [coursesLoading, setCoursesLoading] = useState(false);
-  const [questoes, setQuestoes]             = useState([]);
-  const [questoesLoading, setQuestoesLoading] = useState(false);
-  const [flashcards, setFlashcards]         = useState([]);
+  const [courses, setCourses]                     = useState([]);
+  const [coursesLoading, setCoursesLoading]       = useState(false);
+  const [questoes, setQuestoes]                   = useState([]);
+  const [questoesLoading, setQuestoesLoading]     = useState(false);
+  const [flashcards, setFlashcards]               = useState([]);
   const [flashcardsLoading, setFlashcardsLoading] = useState(false);
 
   // ── Modals ──
-  const [importOpen, setImportOpen]     = useState(false);
+  const [importOpen, setImportOpen]       = useState(false);
   const [creatingFlash, setCreatingFlash] = useState(false);
 
   // ── Load courses on login ──
   useEffect(() => {
-    if (!loggedIn) return;
     setCoursesLoading(true);
     cursosAPI.listar()
       .then(setCourses)
       .catch((err) => toast({ type: 'danger', msg: `Erro ao carregar aulas: ${err.message}` }))
       .finally(() => setCoursesLoading(false));
-  }, [loggedIn]);
+  }, [section]);
 
   const currentCourse = courses.find((c) => c.id === courseId) ?? null;
 
@@ -74,11 +65,6 @@ function AdminApp() {
     setCourseId(null);
     setQuestoes([]);
     setFlashcards([]);
-  };
-
-  const logout = () => {
-    token.clear();
-    setLoggedIn(false);
   };
 
   // ── Handlers — questões ──
@@ -179,14 +165,16 @@ function AdminApp() {
 
   // ── Render ──
 
-  if (!loggedIn) {
-    return <LoginPage onLogin={() => setLoggedIn(true)} />;
-  }
-
   const totalQuestoes   = courses.reduce((a, c) => a + (c.questoes_count   ?? 0), 0);
   const totalFlashcards = courses.reduce((a, c) => a + (c.flashcards_count ?? 0), 0);
   const coursesWithQ    = courses.filter((c) => (c.questoes_count   ?? 0) > 0);
   const coursesWithF    = courses.filter((c) => (c.flashcards_count ?? 0) > 0);
+
+  const breadcrumbSection = {
+    questoes:   'Questões — Trilha',
+    flashcards: 'Flashcards',
+    busca:      'Busca Global',
+  }[section];
 
   return (
     <div className="app">
@@ -200,23 +188,15 @@ function AdminApp() {
           <nav className="breadcrumb">
             <span>Aulas</span>
             <span className="sep">/</span>
-            <span className="current">
-              {section === 'questoes' ? 'Questões — Trilha' : 'Flashcards'}
-            </span>
-            {currentCourse && (
+            <span className="current">{breadcrumbSection}</span>
+            {currentCourse && section !== 'busca' && (
               <>
                 <span className="sep">/</span>
                 <span className="current">{currentCourse.nome}</span>
               </>
             )}
           </nav>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={logout}
-            style={{ fontSize: 12, color: 'var(--fg-soft)' }}
-          >
-            Sair
-          </button>
+
         </div>
       </header>
 
@@ -235,32 +215,42 @@ function AdminApp() {
           Flashcards
           <span className="count">{totalFlashcards}</span>
         </button>
+        <button
+          className={section === 'busca' ? 'active' : ''}
+          onClick={() => switchSection('busca')}
+        >
+          Busca Global
+        </button>
       </div>
 
-      {courseId === null && (
-        <div className="page-head">
-          <h1>
-            {section === 'questoes'
-              ? <><span style={{ color: '#475569', fontWeight: 500 }}>Questões</span> <em>— Trilha</em></>
-              : <span style={{ color: '#475569', fontWeight: 500 }}>Flashcards</span>
-            }
-          </h1>
-          <p>
-            {section === 'questoes'
-              ? 'Gerencie o banco de questões por aula. Edite alternativas e gabaritos, ou faça exclusões quando precisar recomeçar.'
-              : 'Cartões de estudo (frente / verso / exemplo) organizados por aula. Crie um a um ou importe em lote.'}
-          </p>
-        </div>
+      {/* ── Busca Global ── */}
+      {section === 'busca' && (
+        <BuscaGlobal
+          onSaveQ={handleSaveQ}
+          onDeleteQ={(id) => handleDeleteQ(id)}
+          onSaveF={handleSaveF}
+          onDeleteF={(id) => handleDeleteF(id)}
+        />
       )}
 
+      {/* ── Questões ── */}
       {section === 'questoes' && courseId === null && (
-        <QuestoesList
-          courses={coursesWithQ}
-          loading={coursesLoading}
-          onOpen={setCourseId}
-          onDeleteAll={handleDeleteAllQ}
-          onImport={() => setImportOpen(true)}
-        />
+        <>
+          <div className="page-head">
+            <h1>
+              <span style={{ color: '#475569', fontWeight: 500 }}>Questões</span>{' '}
+              <em>— Trilha</em>
+            </h1>
+            <p>Gerencie o banco de questões por aula. Edite alternativas e gabaritos, ou faça exclusões quando precisar recomeçar.</p>
+          </div>
+          <QuestoesList
+            courses={coursesWithQ}
+            loading={coursesLoading}
+            onOpen={setCourseId}
+            onDeleteAll={handleDeleteAllQ}
+            onImport={() => setImportOpen(true)}
+          />
+        </>
       )}
 
       {section === 'questoes' && currentCourse && (
@@ -274,14 +264,23 @@ function AdminApp() {
         />
       )}
 
+      {/* ── Flashcards ── */}
       {section === 'flashcards' && courseId === null && (
-        <FlashcardsList
-          courses={coursesWithF}
-          loading={coursesLoading}
-          onOpen={setCourseId}
-          onDeleteAll={handleDeleteAllF}
-          onImport={() => setImportOpen(true)}
-        />
+        <>
+          <div className="page-head">
+            <h1>
+              <span style={{ color: '#475569', fontWeight: 500 }}>Flashcards</span>
+            </h1>
+            <p>Cartões de estudo (frente / verso / exemplo) organizados por aula. Crie um a um ou importe em lote.</p>
+          </div>
+          <FlashcardsList
+            courses={coursesWithF}
+            loading={coursesLoading}
+            onOpen={setCourseId}
+            onDeleteAll={handleDeleteAllF}
+            onImport={() => setImportOpen(true)}
+          />
+        </>
       )}
 
       {section === 'flashcards' && currentCourse && (
@@ -300,10 +299,16 @@ function AdminApp() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         kind={section}
-        onImport={(file) => {
-          // TODO: converter XLSX → array e chamar questoesAPI.importarArray / flashcardsAPI.importarArray
-          setImportOpen(false);
-          if (file) toast({ type: 'success', msg: `${file.name} recebido — conecte a conversão XLSX no ImportModal` });
+        onImportDone={({ ok, failed }) => {
+          // Recarrega cursos para atualizar contagens
+          cursosAPI.listar().then(setCourses).catch(() => {});
+          // Recarrega questões/flashcards do curso atual se estiver em detalhe
+          if (courseId && section === 'questoes') {
+            questoesAPI.listarPorCurso(courseId).then(setQuestoes).catch(() => {});
+          }
+          if (courseId && section === 'flashcards') {
+            flashcardsAPI.listarPorCurso(courseId).then(setFlashcards).catch(() => {});
+          }
         }}
       />
 
