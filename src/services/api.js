@@ -1,164 +1,277 @@
 /**
  * Chackara Admin — API Service
+ * Mapeado para o backend p360 (Node/Express, porta 3002)
  *
- * Each function maps to a backend endpoint.
- * Replace BASE_URL via VITE_API_URL in your .env file.
- *
- * During development without a backend, set VITE_API_URL to your local server.
+ * Configure VITE_API_URL no .env.local, ex:
+ *   VITE_API_URL=http://localhost:3002/api
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002/api';
+
+// ─────────────────────────────────────────────
+// Token JWT (localStorage)
+// ─────────────────────────────────────────────
+
+export const token = {
+  get: ()        => localStorage.getItem('p360_admin_token'),
+  set: (t)       => localStorage.setItem('p360_admin_token', t),
+  clear: ()      => localStorage.removeItem('p360_admin_token'),
+  exists: ()     => !!localStorage.getItem('p360_admin_token'),
+};
+
+// ─────────────────────────────────────────────
+// Fetch base (injeta Authorization em todo request)
+// ─────────────────────────────────────────────
 
 async function request(method, path, body) {
-  const opts = {
-    method,
-    headers: {},
-  };
+  const jwt = token.get();
+  const opts = { method, headers: {} };
+
+  if (jwt) opts.headers['Authorization'] = `Bearer ${jwt}`;
+
   if (body instanceof FormData) {
     opts.body = body;
   } else if (body) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
   }
+
   const res = await fetch(`${BASE_URL}${path}`, opts);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
-    throw new Error(err.message || `HTTP ${res.status}`);
+
+  if (res.status === 401) {
+    token.clear();
+    window.dispatchEvent(new Event('p360:logout'));
+    throw new Error('Sessão expirada. Faça login novamente.');
   }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || `Erro HTTP ${res.status}`);
+  }
+
   if (res.status === 204) return null;
   return res.json();
 }
 
 // ─────────────────────────────────────────────
-// Cursos
+// Normalização: backend → frontend
+// ─────────────────────────────────────────────
+
+const DIFICULDADE_LABEL = { 1: 'Fácil', 2: 'Médio', 3: 'Difícil' };
+const DIFICULDADE_NUM   = { 'Fácil': 1, 'Médio': 2, 'Difícil': 3 };
+
+function tagsToArray(tags) {
+  if (Array.isArray(tags)) return tags;
+  if (!tags) return [];
+  return tags.split(',').map((t) => t.trim()).filter(Boolean);
+}
+
+function tagsToString(tags) {
+  if (!tags) return '';
+  if (Array.isArray(tags)) return tags.join(',');
+  return tags;
+}
+
+// aula → formato esperado pelos componentes (equivalente a "curso")
+function normalizeAula(aula) {
+  return {
+    id:               aula.aula_id,
+    nome:             aula.aula_nome,
+    tipo:             aula.grande_area || '—',
+    especialidade:    aula.grande_area || '—',
+    diagnostico:      aula.descricao   || '',
+    tags:             [],
+    questoes_count:   Number(aula.total_questoes   ?? aula.questoes_count   ?? 0),
+    flashcards_count: Number(aula.total_flashcards ?? aula.flashcards_count ?? 0),
+  };
+}
+
+function normalizeQuestao(q) {
+  return {
+    id:          q.id,
+    aula_id:     q.aula_id,
+    enunciado:   q.enunciado   || '',
+    alternativas: Array.isArray(q.alternativas) ? q.alternativas : [],
+    gabarito:    q.gabarito    || '',
+    instituicao: q.instituicao || '',
+    ano:         String(q.ano  || ''),
+    dificuldade: DIFICULDADE_LABEL[q.dificuldade] || q.dificuldade || 'Médio',
+    tags:        tagsToArray(q.tags),
+    essencial:   !!q.essencial,
+    feedback:    q.feedback_prof || '',
+    imagem:      q.img_url       || '',
+  };
+}
+
+function denormalizeQuestao(q) {
+  return {
+    aula_id:       q.aula_id,
+    enunciado:     q.enunciado,
+    img_url:       q.imagem      || '',
+    alternativas:  q.alternativas,
+    gabarito:      q.gabarito,
+    feedback_prof: q.feedback    || '',
+    instituicao:   q.instituicao || '',
+    ano:           Number(q.ano) || null,
+    dificuldade:   DIFICULDADE_NUM[q.dificuldade] ?? 2,
+    tags:          tagsToString(q.tags),
+    essencial:     !!q.essencial,
+  };
+}
+
+function normalizeFlashcard(f) {
+  return {
+    id:      f.id,
+    aula_id: f.aula_id,
+    frente:  f.frente  || '',
+    verso:   f.verso   || '',
+    exemplo: f.exemplo || '',
+    tags:    tagsToArray(f.tags),
+  };
+}
+
+function denormalizeFlashcard(f) {
+  return {
+    aula_id: f.aula_id,
+    frente:  f.frente,
+    verso:   f.verso,
+    exemplo: f.exemplo || '',
+    tags:    tagsToString(f.tags),
+  };
+}
+
+// ─────────────────────────────────────────────
+// Auth — /api/auth
+// ─────────────────────────────────────────────
+
+export const authAPI = {
+  /** POST /api/auth/solicitar-codigo  →  envia OTP por email */
+  solicitarCodigo: (email) =>
+    request('POST', '/auth/solicitar-codigo', { email }),
+
+  /** POST /api/auth/validar-codigo  →  { token: "..." } */
+  validarCodigo: (email, codigo) =>
+    request('POST', '/auth/validar-codigo', { email, codigo }),
+};
+
+// ─────────────────────────────────────────────
+// Aulas (exibidas como "cursos" na UI)
 // ─────────────────────────────────────────────
 
 export const cursosAPI = {
   /**
-   * GET /cursos
-   * Returns: Curso[]
-   * Curso: { id, nome, tipo, especialidade, diagnostico, tags, questoes_count, flashcards_count }
+   * GET /api/questoes/aulas-disponiveis
+   * Retorna aulas com contagem de questões.
+   * Usado em ambas as abas (questões e flashcards).
    */
-  listar: () => request('GET', '/cursos'),
-
-  /**
-   * GET /cursos/:id
-   * Returns: Curso
-   */
-  buscar: (id) => request('GET', `/cursos/${id}`),
+  listar: async () => {
+    const data = await request('GET', '/questoes/aulas-disponiveis');
+    return (data || []).map(normalizeAula);
+  },
 };
 
 // ─────────────────────────────────────────────
-// Questões
+// Questões — /api/admin/questoes
 // ─────────────────────────────────────────────
 
 export const questoesAPI = {
   /**
-   * GET /cursos/:cursoId/questoes
-   * Returns: Questao[]
-   * Questao: { id, enunciado, alternativas, gabarito, instituicao, ano, dificuldade, tags, essencial, feedback, imagem? }
+   * GET /api/questoes?aula_id=X&limite=todos
+   * Lista questões de uma aula.
    */
-  listarPorCurso: (cursoId) => request('GET', `/cursos/${cursoId}/questoes`),
-
-  /**
-   * PUT /questoes/:id
-   * Body: Questao (parcial)
-   * Returns: Questao
-   */
-  atualizar: (id, data) => request('PUT', `/questoes/${id}`, data),
-
-  /**
-   * DELETE /questoes/:id
-   * Returns: null (204)
-   */
-  excluir: (id) => request('DELETE', `/questoes/${id}`),
-
-  /**
-   * DELETE /cursos/:cursoId/questoes
-   * Deletes all questions for a course.
-   * Returns: { deleted: number }
-   */
-  excluirTodas: (cursoId) => request('DELETE', `/cursos/${cursoId}/questoes`),
-
-  /**
-   * POST /cursos/:cursoId/questoes/importar
-   * Body: FormData with field "arquivo" (.xlsx)
-   * Returns: { importadas: number, erros: number, detalhes?: string[] }
-   */
-  importarXLSX: (cursoId, arquivo) => {
-    const form = new FormData();
-    form.append('arquivo', arquivo);
-    return request('POST', `/cursos/${cursoId}/questoes/importar`, form);
+  listarPorCurso: async (aulaId) => {
+    const data = await request('GET', `/questoes?aula_id=${aulaId}&limite=todos`);
+    return (data || []).map(normalizeQuestao);
   },
 
   /**
-   * GET /questoes/template
-   * Returns: Blob (.xlsx template)
+   * PUT /api/admin/questoes/:id
+   * Atualiza campos de uma questão.
    */
-  downloadTemplate: async () => {
-    const res = await fetch(`${BASE_URL}/questoes/template`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.blob();
+  atualizar: async (id, data) => {
+    const updated = await request('PUT', `/admin/questoes/${id}`, denormalizeQuestao(data));
+    return normalizeQuestao(updated);
   },
+
+  /**
+   * DELETE /api/admin/questoes/:id
+   * Remove uma questão.
+   */
+  excluir: (id) => request('DELETE', `/admin/questoes/${id}`),
+
+  /**
+   * Exclusão em massa — sem endpoint bulk no backend.
+   * Faz deletes individuais em série com a lista já carregada.
+   */
+  excluirTodas: async (_aulaId, ids = []) => {
+    for (const id of ids) {
+      await request('DELETE', `/admin/questoes/${id}`);
+    }
+    return { deleted: ids.length };
+  },
+
+  /**
+   * POST /api/admin/questoes  (aceita array)
+   * Para importação XLSX — o serviço de conversão fica no front ou num endpoint dedicado.
+   * Adapte conforme o backend suportar upload de arquivo.
+   */
+  importarArray: (questoes) =>
+    request('POST', '/admin/questoes', questoes),
 };
 
 // ─────────────────────────────────────────────
-// Flashcards
+// Flashcards — /api/admin/flashcards
 // ─────────────────────────────────────────────
 
 export const flashcardsAPI = {
   /**
-   * GET /cursos/:cursoId/flashcards
-   * Returns: Flashcard[]
-   * Flashcard: { id, frente, verso, exemplo, tags }
+   * GET /api/estudo-manual?aula_id=X&limite=todos
+   * Lista todos os flashcards de uma aula (sem filtro SRS).
    */
-  listarPorCurso: (cursoId) => request('GET', `/cursos/${cursoId}/flashcards`),
-
-  /**
-   * POST /cursos/:cursoId/flashcards
-   * Body: { frente, verso, exemplo?, tags }
-   * Returns: Flashcard
-   */
-  criar: (cursoId, data) => request('POST', `/cursos/${cursoId}/flashcards`, data),
-
-  /**
-   * PUT /flashcards/:id
-   * Body: Flashcard (parcial)
-   * Returns: Flashcard
-   */
-  atualizar: (id, data) => request('PUT', `/flashcards/${id}`, data),
-
-  /**
-   * DELETE /flashcards/:id
-   * Returns: null (204)
-   */
-  excluir: (id) => request('DELETE', `/flashcards/${id}`),
-
-  /**
-   * DELETE /cursos/:cursoId/flashcards
-   * Deletes all flashcards for a course.
-   * Returns: { deleted: number }
-   */
-  excluirTodos: (cursoId) => request('DELETE', `/cursos/${cursoId}/flashcards`),
-
-  /**
-   * POST /cursos/:cursoId/flashcards/importar
-   * Body: FormData with field "arquivo" (.xlsx)
-   * Returns: { importados: number, erros: number, detalhes?: string[] }
-   */
-  importarXLSX: (cursoId, arquivo) => {
-    const form = new FormData();
-    form.append('arquivo', arquivo);
-    return request('POST', `/cursos/${cursoId}/flashcards/importar`, form);
+  listarPorCurso: async (aulaId) => {
+    const data = await request('GET', `/estudo-manual?aula_id=${aulaId}&limite=todos`);
+    return (data || []).map(normalizeFlashcard);
   },
 
   /**
-   * GET /flashcards/template
-   * Returns: Blob (.xlsx template)
+   * POST /api/admin/flashcards
+   * Cria um flashcard. Aceita objeto único ou array.
    */
-  downloadTemplate: async () => {
-    const res = await fetch(`${BASE_URL}/flashcards/template`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.blob();
+  criar: async (aulaId, data) => {
+    const payload = denormalizeFlashcard({ ...data, aula_id: aulaId });
+    const created = await request('POST', '/admin/flashcards', payload);
+    const item = Array.isArray(created) ? created[0] : created;
+    return normalizeFlashcard(item);
   },
+
+  /**
+   * PUT /api/admin/flashcards/:id
+   * Atualiza campos de um flashcard.
+   */
+  atualizar: async (id, data) => {
+    const updated = await request('PUT', `/admin/flashcards/${id}`, denormalizeFlashcard(data));
+    return normalizeFlashcard(updated);
+  },
+
+  /**
+   * DELETE /api/admin/flashcards/:id
+   * Remove um flashcard.
+   */
+  excluir: (id) => request('DELETE', `/admin/flashcards/${id}`),
+
+  /**
+   * Exclusão em massa — sem endpoint bulk. Deletes individuais.
+   */
+  excluirTodos: async (_aulaId, ids = []) => {
+    for (const id of ids) {
+      await request('DELETE', `/admin/flashcards/${id}`);
+    }
+    return { deleted: ids.length };
+  },
+
+  /**
+   * POST /api/admin/flashcards  (array)
+   */
+  importarArray: (flashcards) =>
+    request('POST', '/admin/flashcards', flashcards),
 };
