@@ -59,8 +59,12 @@ function normalizeDificuldade(val) {
 }
 
 function denormalizeDificuldade(val) {
-  const map = { 'Fácil': 1, 'Médio': 2, 'Difícil': 3 };
-  return map[val] ?? 2;
+  const map = {
+    'Fácil': 'Facil', 'Facil': 'Facil', 1: 'Facil', '1': 'Facil',
+    'Médio': 'Media', 'Medio': 'Media', 'Media': 'Media', 2: 'Media', '2': 'Media',
+    'Difícil': 'Dificil', 'Dificil': 'Dificil', 3: 'Dificil', '3': 'Dificil',
+  };
+  return map[val] ?? 'Media';
 }
 
 /**
