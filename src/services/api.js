@@ -172,7 +172,6 @@ function normalizeFlashcard(f) {
 function denormalizeFlashcard(f) {
   return {
     aula_id: f.aula_id,
-    frente:  f.frente,
     verso:   f.verso,
     exemplo: f.exemplo || '',
     tags:    tagsToString(f.tags),
