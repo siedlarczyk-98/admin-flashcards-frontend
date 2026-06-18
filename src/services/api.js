@@ -145,7 +145,6 @@ function normalizeQuestao(q) {
 function denormalizeQuestao(q) {
   return {
     aula_id:       q.aula_id,
-    enunciado:     q.enunciado,
     img_url:       q.imagem      || '',
     alternativas:  denormalizeAlternativas(q.alternativas),
     gabarito:      q.gabarito,
